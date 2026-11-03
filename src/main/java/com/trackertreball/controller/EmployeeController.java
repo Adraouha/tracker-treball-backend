@@ -13,10 +13,10 @@ import java.util.Map;
 
 /**
  * Controlador REST para la administracion y consulta del directorio de empleados.
- * Integra la generacion automatica de credenciales seguras de acceso.
+ * Integra la generacion automatica de credenciales seguras de acceso y CRUD completo.
  *
  * @author Hassan Adraou
- * @version 2.0.0
+ * @version 2.1.0
  * @since 2026-11-02
  */
 @RestController
@@ -72,6 +72,18 @@ public class EmployeeController {
             if (updated.getTelefono() != null) emp.setTelefono(updated.getTelefono());
             emp.setActivo(updated.isActivo());
             return ResponseEntity.ok(employeeRepository.save(emp));
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> deleteEmployee(@PathVariable Long id) {
+        return employeeRepository.findById(id).map(emp -> {
+            emp.setActivo(false);
+            employeeRepository.save(emp);
+            return ResponseEntity.ok(Map.of(
+                    "status", "SUCCESS",
+                    "message", "Empleado archivado/desactivado correctamente con ID " + id
+            ));
         }).orElse(ResponseEntity.notFound().build());
     }
 }

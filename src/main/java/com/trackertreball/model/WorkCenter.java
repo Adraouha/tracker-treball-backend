@@ -8,7 +8,7 @@ import java.time.LocalDateTime;
  * Entidad JPA que representa un Centro de Trabajo oficial en Tracker Treball.
  *
  * @author Hassan Adraou
- * @version 1.0.0
+ * @version 2.0.0
  * @since 2026-11-03
  */
 @Entity
@@ -36,6 +36,15 @@ public class WorkCenter {
 
     @Column(nullable = false, length = 160)
     private String direccion;
+
+    @Column(name = "codigo_centro", length = 20)
+    private String codigoCentro = "CT-01";
+
+    @Column(length = 30)
+    private String telefono = "+34 93 456 78 90";
+
+    @Column(length = 80)
+    private String horario = "Lunes a Viernes 08:00 - 18:00";
 
     @Column(nullable = false, precision = 9, scale = 6)
     private BigDecimal latitud;
@@ -72,6 +81,15 @@ public class WorkCenter {
     public String getDireccion() { return direccion; }
     public void setDireccion(String direccion) { this.direccion = direccion; }
 
+    public String getCodigoCentro() { return codigoCentro; }
+    public void setCodigoCentro(String codigoCentro) { this.codigoCentro = codigoCentro; }
+
+    public String getTelefono() { return telefono; }
+    public void setTelefono(String telefono) { this.telefono = telefono; }
+
+    public String getHorario() { return horario; }
+    public void setHorario(String horario) { this.horario = horario; }
+
     public BigDecimal getLatitud() { return latitud; }
     public void setLatitud(BigDecimal latitud) { this.latitud = latitud; }
 
@@ -84,4 +102,3 @@ public class WorkCenter {
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 }
-
