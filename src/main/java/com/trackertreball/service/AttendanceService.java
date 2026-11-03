@@ -18,7 +18,7 @@ import java.util.*;
  * Incluye calculo automatico de exceso de descansos y reportes semanales/mensuales.
  *
  * @author Hassan Adraou
- * @version 2.0.0
+ * @version 2.1.0
  * @since 2026-11-02
  */
 @Service
@@ -33,19 +33,22 @@ public class AttendanceService {
     }
 
     public Optional<AttendanceRecord> getTodayAttendance(Long employeeId) {
-        return attendanceRepository.findByEmployeeIdAndWorkDate(employeeId, LocalDate.now());
+        return attendanceRepository.findFirstByEmployeeIdAndWorkDateOrderByClockInTimeDesc(employeeId, LocalDate.now());
     }
 
     @Transactional
     public AttendanceRecord clockIn(Long employeeId, String modality) {
         LocalDate today = LocalDate.now();
-        Optional<AttendanceRecord> existing = attendanceRepository.findByEmployeeIdAndWorkDate(employeeId, today);
-        if (existing.isPresent() && "OPEN".equals(existing.get().getStatus())) {
-            throw new IllegalStateException("El empleado ya tiene una jornada activa.");
+        Optional<AttendanceRecord> existingOpen = attendanceRepository
+                .findFirstByEmployeeIdAndWorkDateAndStatusOrderByClockInTimeDesc(employeeId, today, "OPEN");
+
+        if (existingOpen.isPresent()) {
+            throw new IllegalStateException("El empleado ya tiene una jornada activa en curso.");
         }
 
         LocalDateTime now = LocalDateTime.now();
-        AttendanceRecord record = new AttendanceRecord(employeeId, today, now, modality);
+        String chosenModality = (modality != null && !modality.isBlank()) ? modality : "PRESENCIAL";
+        AttendanceRecord record = new AttendanceRecord(employeeId, today, now, chosenModality);
         record.setRecordHash(generateHash(employeeId, now.toString()));
         return attendanceRepository.save(record);
     }
@@ -53,26 +56,31 @@ public class AttendanceService {
     @Transactional
     public BreakRecord startBreak(Long employeeId, String breakType, Integer tiempoEstipuladoMinutos) {
         LocalDate today = LocalDate.now();
-        AttendanceRecord attendance = attendanceRepository.findByEmployeeIdAndWorkDate(employeeId, today)
+        AttendanceRecord attendance = attendanceRepository
+                .findFirstByEmployeeIdAndWorkDateAndStatusOrderByClockInTimeDesc(employeeId, today, "OPEN")
                 .orElseThrow(() -> new IllegalStateException("No hay jornada activa para iniciar descanso."));
 
-        Optional<BreakRecord> openBreak = breakRepository.findFirstByAttendanceIdAndEndTimeIsNullOrderByStartTimeDesc(attendance.getId());
+        Optional<BreakRecord> openBreak = breakRepository
+                .findFirstByAttendanceIdAndEndTimeIsNullOrderByStartTimeDesc(attendance.getId());
         if (openBreak.isPresent()) {
             return openBreak.get();
         }
 
         int estipulado = (tiempoEstipuladoMinutos != null && tiempoEstipuladoMinutos > 0) ? tiempoEstipuladoMinutos : 15;
-        BreakRecord b = new BreakRecord(attendance.getId(), breakType != null ? breakType : "PAUSA", LocalDateTime.now(), estipulado);
+        String type = (breakType != null && !breakType.isBlank()) ? breakType : "PAUSA";
+        BreakRecord b = new BreakRecord(attendance.getId(), type, LocalDateTime.now(), estipulado);
         return breakRepository.save(b);
     }
 
     @Transactional
     public BreakRecord finishBreak(Long employeeId) {
         LocalDate today = LocalDate.now();
-        AttendanceRecord attendance = attendanceRepository.findByEmployeeIdAndWorkDate(employeeId, today)
+        AttendanceRecord attendance = attendanceRepository
+                .findFirstByEmployeeIdAndWorkDateAndStatusOrderByClockInTimeDesc(employeeId, today, "OPEN")
                 .orElseThrow(() -> new IllegalStateException("No hay jornada activa para finalizar descanso."));
 
-        BreakRecord b = breakRepository.findFirstByAttendanceIdAndEndTimeIsNullOrderByStartTimeDesc(attendance.getId())
+        BreakRecord b = breakRepository
+                .findFirstByAttendanceIdAndEndTimeIsNullOrderByStartTimeDesc(attendance.getId())
                 .orElseThrow(() -> new IllegalStateException("No hay ninguna pausa abierta actualmente."));
 
         LocalDateTime now = LocalDateTime.now();
@@ -97,10 +105,12 @@ public class AttendanceService {
     @Transactional
     public BreakRecord toggleBreak(Long employeeId, String breakType) {
         LocalDate today = LocalDate.now();
-        AttendanceRecord attendance = attendanceRepository.findByEmployeeIdAndWorkDate(employeeId, today)
+        AttendanceRecord attendance = attendanceRepository
+                .findFirstByEmployeeIdAndWorkDateAndStatusOrderByClockInTimeDesc(employeeId, today, "OPEN")
                 .orElseThrow(() -> new IllegalStateException("No hay jornada activa para gestionar pausas."));
 
-        Optional<BreakRecord> openBreak = breakRepository.findFirstByAttendanceIdAndEndTimeIsNullOrderByStartTimeDesc(attendance.getId());
+        Optional<BreakRecord> openBreak = breakRepository
+                .findFirstByAttendanceIdAndEndTimeIsNullOrderByStartTimeDesc(attendance.getId());
         if (openBreak.isPresent()) {
             return finishBreak(employeeId);
         } else {
@@ -113,13 +123,15 @@ public class AttendanceService {
     @Transactional
     public AttendanceRecord clockOut(Long employeeId) {
         LocalDate today = LocalDate.now();
-        AttendanceRecord attendance = attendanceRepository.findByEmployeeIdAndWorkDate(employeeId, today)
+        AttendanceRecord attendance = attendanceRepository
+                .findFirstByEmployeeIdAndWorkDateAndStatusOrderByClockInTimeDesc(employeeId, today, "OPEN")
                 .orElseThrow(() -> new IllegalStateException("No hay jornada activa para cerrar."));
 
         LocalDateTime now = LocalDateTime.now();
         attendance.setClockOutTime(now);
 
-        Optional<BreakRecord> openBreak = breakRepository.findFirstByAttendanceIdAndEndTimeIsNullOrderByStartTimeDesc(attendance.getId());
+        Optional<BreakRecord> openBreak = breakRepository
+                .findFirstByAttendanceIdAndEndTimeIsNullOrderByStartTimeDesc(attendance.getId());
         if (openBreak.isPresent()) {
             finishBreak(employeeId);
         }
@@ -148,6 +160,10 @@ public class AttendanceService {
         int weekWorkedMinutes = 0;
         int monthWorkedMinutes = 0;
 
+        int totalOvertimeMinutes = 0;
+        int weekOvertimeMinutes = 0;
+        int monthOvertimeMinutes = 0;
+
         int totalPausaMinutos = 0;
         int totalMinutosAdicionales = 0;
         int weekMinutosAdicionales = 0;
@@ -159,11 +175,17 @@ public class AttendanceService {
             int worked = att.getWorkedMinutes() != null ? att.getWorkedMinutes() : 0;
             totalWorkedMinutes += worked;
 
+            // Horas extra sobre jornada estandar diaria de 8h (480 minutos)
+            int dailyOvertime = Math.max(0, worked - 480);
+            totalOvertimeMinutes += dailyOvertime;
+
             if (!att.getWorkDate().isBefore(weekStart)) {
                 weekWorkedMinutes += worked;
+                weekOvertimeMinutes += dailyOvertime;
             }
             if (!att.getWorkDate().isBefore(monthStart)) {
                 monthWorkedMinutes += worked;
+                monthOvertimeMinutes += dailyOvertime;
             }
 
             List<BreakRecord> breaks = breakRepository.findByAttendanceId(att.getId());
@@ -196,6 +218,11 @@ public class AttendanceService {
         res.put("totalHorasTrabajadas", formatHoursAndMinutes(totalWorkedMinutes));
         res.put("semanalHorasTrabajadas", formatHoursAndMinutes(weekWorkedMinutes));
         res.put("mensualHorasTrabajadas", formatHoursAndMinutes(monthWorkedMinutes));
+
+        // Horas extraordinarias trabajadas
+        res.put("totalHorasExtra", formatHoursAndMinutes(totalOvertimeMinutes));
+        res.put("semanalHorasExtra", formatHoursAndMinutes(weekOvertimeMinutes));
+        res.put("mensualHorasExtra", formatHoursAndMinutes(monthOvertimeMinutes));
 
         // Apartado de tiempo adicional consumido en pausas convertido a horas y minutos
         res.put("totalMinutosAdicionales", totalMinutosAdicionales);

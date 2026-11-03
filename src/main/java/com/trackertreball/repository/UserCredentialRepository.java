@@ -11,3 +11,4 @@ public interface UserCredentialRepository extends JpaRepository<UserCredential, 
     Optional<UserCredential> findByUsernameIgnoreCase(String username);
     Optional<UserCredential> findByEmployeeId(Long employeeId);
 }
+

@@ -12,9 +12,10 @@ import java.util.Optional;
 
 /**
  * Controlador REST para la gestion del registro de jornada laboral obligatoria, pausas y auditorias.
+ * Soporta parametros tanto por QueryParams como por RequestBody JSON.
  *
  * @author Hassan Adraou
- * @version 2.0.0
+ * @version 2.1.0
  * @since 2026-11-02
  */
 @RestController
@@ -38,45 +39,74 @@ public class AttendanceController {
 
     @PostMapping("/clock-in")
     public ResponseEntity<AttendanceRecord> clockIn(
-            @RequestParam(defaultValue = "1") Long employeeId,
-            @RequestParam(defaultValue = "MANUAL") String modality) {
-        AttendanceRecord record = attendanceService.clockIn(employeeId, modality);
+            @RequestParam(required = false) Long employeeId,
+            @RequestParam(required = false) String modality,
+            @RequestBody(required = false) Map<String, Object> body) {
+        Long resolvedEmpId = resolveEmployeeId(employeeId, body);
+        String resolvedModality = modality != null ? modality :
+                (body != null && body.containsKey("modality") ? body.get("modality").toString() : "PRESENCIAL");
+
+        AttendanceRecord record = attendanceService.clockIn(resolvedEmpId, resolvedModality);
         return ResponseEntity.status(HttpStatus.CREATED).body(record);
     }
 
     @PostMapping("/toggle-break")
     public ResponseEntity<BreakRecord> toggleBreak(
-            @RequestParam(defaultValue = "1") Long employeeId,
-            @RequestParam(defaultValue = "PAUSA") String breakType) {
-        BreakRecord record = attendanceService.toggleBreak(employeeId, breakType);
+            @RequestParam(required = false) Long employeeId,
+            @RequestParam(required = false) String breakType,
+            @RequestBody(required = false) Map<String, Object> body) {
+        Long resolvedEmpId = resolveEmployeeId(employeeId, body);
+        String resolvedType = breakType != null ? breakType :
+                (body != null && body.containsKey("breakType") ? body.get("breakType").toString() : "PAUSA");
+
+        BreakRecord record = attendanceService.toggleBreak(resolvedEmpId, resolvedType);
         return ResponseEntity.ok(record);
     }
 
     @PostMapping("/break/start")
     public ResponseEntity<BreakRecord> startBreak(
-            @RequestParam(defaultValue = "1") Long employeeId,
-            @RequestParam(defaultValue = "PAUSA") String breakType,
-            @RequestParam(defaultValue = "15") Integer minutes) {
-        BreakRecord record = attendanceService.startBreak(employeeId, breakType, minutes);
+            @RequestParam(required = false) Long employeeId,
+            @RequestParam(required = false) String breakType,
+            @RequestParam(required = false) Integer minutes,
+            @RequestBody(required = false) Map<String, Object> body) {
+        Long resolvedEmpId = resolveEmployeeId(employeeId, body);
+        String resolvedType = breakType != null ? breakType :
+                (body != null && body.containsKey("breakType") ? body.get("breakType").toString() : "PAUSA");
+        Integer resolvedMinutes = minutes != null ? minutes :
+                (body != null && body.containsKey("minutes") ? Integer.valueOf(body.get("minutes").toString()) : 15);
+
+        BreakRecord record = attendanceService.startBreak(resolvedEmpId, resolvedType, resolvedMinutes);
         return ResponseEntity.ok(record);
     }
 
     @PostMapping("/break/finish")
     public ResponseEntity<BreakRecord> finishBreak(
-            @RequestParam(defaultValue = "1") Long employeeId) {
-        BreakRecord record = attendanceService.finishBreak(employeeId);
+            @RequestParam(required = false) Long employeeId,
+            @RequestBody(required = false) Map<String, Object> body) {
+        Long resolvedEmpId = resolveEmployeeId(employeeId, body);
+        BreakRecord record = attendanceService.finishBreak(resolvedEmpId);
         return ResponseEntity.ok(record);
     }
 
     @PostMapping("/clock-out")
     public ResponseEntity<AttendanceRecord> clockOut(
-            @RequestParam(defaultValue = "1") Long employeeId) {
-        AttendanceRecord record = attendanceService.clockOut(employeeId);
+            @RequestParam(required = false) Long employeeId,
+            @RequestBody(required = false) Map<String, Object> body) {
+        Long resolvedEmpId = resolveEmployeeId(employeeId, body);
+        AttendanceRecord record = attendanceService.clockOut(resolvedEmpId);
         return ResponseEntity.ok(record);
     }
 
     @GetMapping("/reports/employee/{employeeId}")
     public ResponseEntity<Map<String, Object>> getReports(@PathVariable Long employeeId) {
         return ResponseEntity.ok(attendanceService.getReports(employeeId));
+    }
+
+    private Long resolveEmployeeId(Long queryParamId, Map<String, Object> body) {
+        if (queryParamId != null) return queryParamId;
+        if (body != null && body.containsKey("employeeId")) {
+            return Long.valueOf(body.get("employeeId").toString());
+        }
+        return 1L;
     }
 }

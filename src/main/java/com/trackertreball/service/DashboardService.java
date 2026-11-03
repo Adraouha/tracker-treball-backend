@@ -1,97 +1,122 @@
 package com.trackertreball.service;
 
 import com.trackertreball.model.AttendanceRecord;
+import com.trackertreball.model.BreakRecord;
 import com.trackertreball.model.Employee;
 import com.trackertreball.model.Project;
 import com.trackertreball.model.SafetyAlert;
+import com.trackertreball.repository.BreakRepository;
 import com.trackertreball.repository.EmployeeRepository;
 import com.trackertreball.repository.ProjectRepository;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.*;
 
 /**
- * Servicio de orquestacion para el asistente inteligente y panel Bento Grid del Dashboard.
- * <p>
- * Agrega informacion multidisciplinar en una sola llamada optimizada:
- * <ul>
- *   <li><b>Hero context:</b> Datos del empleado, ubicacion (Vic Central), clima actual y estado del trayecto/commute.</li>
- *   <li><b>Shift status:</b> Estado reactivo del temporizador de jornada, horario oficial y minutos trabajados.</li>
- *   <li><b>Smart Reminders:</b> Avisos inteligentes de pausas pendientes y ergonomia visual PRL.</li>
- *   <li><b>Active Project:</b> Proyecto en curso asignado, avance de Sprint y horas imputadas.</li>
- *   <li><b>Safety Alerts:</b> Avisos meteorologicos y preventivos de Osona via el modulo PRL.</li>
- * </ul>
- * </p>
+ * Servicio de orquestacion para el Smart Work Assistant del Dashboard.
  *
  * @author Hassan Adraou
- * @version 1.0.0
+ * @version 2.1.0
  * @since 2026-11-02
- * @see AttendanceService
- * @see PrlService
  */
 @Service
 public class DashboardService {
 
     private final EmployeeRepository employeeRepository;
     private final AttendanceService attendanceService;
+    private final BreakRepository breakRepository;
     private final ProjectRepository projectRepository;
     private final PrlService prlService;
 
-    /**
-     * Constructor con inyeccion de los componentes requeridos para alimentar el asistente.
-     *
-     * @param employeeRepository Repositorio de empleados.
-     * @param attendanceService Servicio de control horario y pausas.
-     * @param projectRepository Repositorio de proyectos y sprints.
-     * @param prlService Servicio de prevencion de riesgos laborales.
-     */
     public DashboardService(EmployeeRepository employeeRepository,
                             AttendanceService attendanceService,
+                            BreakRepository breakRepository,
                             ProjectRepository projectRepository,
                             PrlService prlService) {
         this.employeeRepository = employeeRepository;
         this.attendanceService = attendanceService;
+        this.breakRepository = breakRepository;
         this.projectRepository = projectRepository;
         this.prlService = prlService;
     }
 
-    /**
-     * Construye el mapa de datos completo para la vista Smart Work Assistant del Dashboard.
-     *
-     * @param employeeId Identificador unico del empleado que visualiza el panel.
-     * @return {@link Map} estructurado con las secciones hero, shift, reminders, project y safety.
-     */
     public Map<String, Object> getSmartWorkAssistantData(Long employeeId) {
         Map<String, Object> data = new HashMap<>();
 
         // 1. Datos del Empleado (Hero)
         Employee employee = employeeRepository.findById(employeeId)
-                .orElse(new Employee("Mohamed O.", "mohamed@trackertreball.com", "Enginyeria", "Desenvolupador Senior", "Oficina Central Vic"));
+                .orElse(new Employee("Hassan Adraou", "hassan.adraou@test.es", "Tecnología", "Administrador General & Tech Lead", "Barcelona"));
+
+        String centro = employee.getCentroTrabajo() != null ? employee.getCentroTrabajo() : "Barcelona";
 
         Map<String, Object> hero = new HashMap<>();
         hero.put("name", employee.getNombre());
-        hero.put("city", "Vic, Barcelona");
-        hero.put("temperature", "14°C");
-        hero.put("weatherCondition", "Parcialment ennuvolat");
-        hero.put("destination", employee.getCentroTrabajo());
-        hero.put("commuteMinutes", 22);
-        hero.put("trafficStatus", "MODERAT");
+        hero.put("city", centro);
+        hero.put("temperature", "17°C");
+        hero.put("weatherCondition", "Soleado con brisa");
+        hero.put("destination", "Centro de Trabajo " + centro);
+        hero.put("commuteMinutes", 20);
+        hero.put("trafficStatus", "FLUIDO");
         data.put("hero", hero);
 
         // 2. Estado de la Jornada
         Optional<AttendanceRecord> attendanceOpt = attendanceService.getTodayAttendance(employeeId);
         Map<String, Object> shift = new HashMap<>();
         shift.put("officialSchedule", "09:00 -> 17:30");
-        shift.put("clockInTime", attendanceOpt.map(a -> a.getClockInTime().toLocalTime().toString().substring(0, 5)).orElse("08:57"));
-        shift.put("workedMinutes", attendanceOpt.map(AttendanceRecord::getWorkedMinutes).orElse(204));
         shift.put("expectedExit", "17:30");
-        shift.put("status", attendanceOpt.map(AttendanceRecord::getStatus).orElse("OPEN"));
+
+        if (attendanceOpt.isPresent()) {
+            AttendanceRecord att = attendanceOpt.get();
+            boolean isOpen = "OPEN".equalsIgnoreCase(att.getStatus());
+            boolean isClosed = "CLOSED".equalsIgnoreCase(att.getStatus());
+
+            shift.put("hasAttendance", true);
+            shift.put("shiftStarted", true);
+            shift.put("status", att.getStatus());
+            shift.put("clockInTime", att.getClockInTime() != null ? att.getClockInTime().toLocalTime().toString().substring(0, 5) : null);
+            shift.put("clockOutTime", att.getClockOutTime() != null ? att.getClockOutTime().toLocalTime().toString().substring(0, 5) : null);
+            shift.put("isFinished", isClosed);
+
+            Optional<BreakRecord> openBreak = breakRepository
+                    .findFirstByAttendanceIdAndEndTimeIsNullOrderByStartTimeDesc(att.getId());
+            shift.put("isOnBreak", openBreak.isPresent());
+            if (openBreak.isPresent()) {
+                shift.put("currentBreakType", openBreak.get().getBreakType());
+                shift.put("breakLimitMinutes", openBreak.get().getTiempoEstipuladoMinutos());
+            }
+
+            if (isOpen && att.getClockInTime() != null) {
+                long totalElapsedSeconds = Duration.between(att.getClockInTime(), LocalDateTime.now()).getSeconds();
+                long totalBreakSeconds = breakRepository.findByAttendanceId(att.getId()).stream()
+                        .mapToLong(b -> b.getDurationMinutes() != null ? (long) b.getDurationMinutes() * 60 : 0)
+                        .sum();
+                long netSeconds = Math.max(0, totalElapsedSeconds - totalBreakSeconds);
+                shift.put("workedSeconds", netSeconds);
+                shift.put("workedMinutes", (int) (netSeconds / 60));
+            } else {
+                int workedMin = att.getWorkedMinutes() != null ? att.getWorkedMinutes() : 0;
+                shift.put("workedSeconds", workedMin * 60);
+                shift.put("workedMinutes", workedMin);
+            }
+        } else {
+            shift.put("hasAttendance", false);
+            shift.put("shiftStarted", false);
+            shift.put("status", "NO_INICIADA");
+            shift.put("clockInTime", null);
+            shift.put("clockOutTime", null);
+            shift.put("isOnBreak", false);
+            shift.put("isFinished", false);
+            shift.put("workedSeconds", 0);
+            shift.put("workedMinutes", 0);
+        }
         data.put("shift", shift);
 
         // 3. Recordatorios Inteligentes (Timeline)
         List<Map<String, String>> reminders = new ArrayList<>();
-        reminders.add(Map.of("type", "WARNING", "title_ca", "Pausa pendent de realitzar", "sub_ca", "Portes 3h continuades de treball efectiu"));
-        reminders.add(Map.of("type", "INFO", "title_ca", "Revisio ergonomica PRL", "sub_ca", "Recorda ajustar l'alcada de la pantalla"));
+        reminders.add(Map.of("type", "INFO", "title_ca", "Pausa ergonómica visual", "sub_ca", "Pausa recomendada cada 2 horas de trabajo en pantalla (PRL)"));
+        reminders.add(Map.of("type", "SUCCESS", "title_ca", "Centro " + centro + " operativo", "sub_ca", "Registro horario verificado conforme RDL 8/2019"));
         data.put("reminders", reminders);
 
         // 4. Proyecto Activo

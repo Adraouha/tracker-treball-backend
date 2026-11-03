@@ -16,7 +16,7 @@ import java.util.Optional;
  * </p>
  *
  * @author Hassan Adraou
- * @version 1.0.0
+ * @version 2.0.0
  * @since 2026-11-02
  * @see com.trackertreball.model.AttendanceRecord
  * @see org.springframework.data.jpa.repository.JpaRepository
@@ -25,21 +25,28 @@ import java.util.Optional;
 public interface AttendanceRepository extends JpaRepository<AttendanceRecord, Long> {
 
     /**
-     * Busca el registro de jornada laboral de un empleado en una fecha concreta.
-     *
-     * @param employeeId Identificador unico del empleado.
-     * @param workDate Fecha de trabajo a consultar.
-     * @return {@link Optional} con el registro de jornada del dia si existe.
+     * Busca el primer registro de jornada laboral de un empleado en una fecha concreta ordenado descendentemente.
+     * Evita excepciones de no-unicidad en caso de reentradas o turnos partidos.
+     */
+    Optional<AttendanceRecord> findFirstByEmployeeIdAndWorkDateOrderByClockInTimeDesc(Long employeeId, LocalDate workDate);
+
+    /**
+     * Localiza la jornada de un empleado segun fecha y estado (ej. OPEN o CLOSED).
+     */
+    Optional<AttendanceRecord> findFirstByEmployeeIdAndWorkDateAndStatusOrderByClockInTimeDesc(Long employeeId, LocalDate workDate, String status);
+
+    /**
+     * Busca el registro de jornada laboral de un empleado en una fecha concreta (compatibilidad legacy).
      */
     Optional<AttendanceRecord> findByEmployeeIdAndWorkDate(Long employeeId, LocalDate workDate);
 
     /**
      * Obtiene el historial completo de jornadas de un empleado ordenado cronologicamente de forma descendente.
-     *
-     * @param employeeId Identificador unico del empleado.
-     * @return Lista de jornadas laborales ordenadas por fecha mas reciente.
      */
     List<AttendanceRecord> findByEmployeeIdOrderByWorkDateDesc(Long employeeId);
 
+    /**
+     * Obtiene todos los registros de jornada de un empleado.
+     */
     List<AttendanceRecord> findByEmployeeId(Long employeeId);
 }

@@ -88,6 +88,11 @@ public class AuthService {
         userData.put("departamento", employee.getDepartamento());
         userData.put("centroTrabajo", employee.getCentroTrabajo());
         userData.put("workCenterId", employee.getWorkCenterId());
+        userData.put("nss", employee.getNss());
+        userData.put("estadoCivil", employee.getEstadoCivil());
+        userData.put("domicilio", employee.getDomicilio());
+        userData.put("telefono", employee.getTelefono());
+        userData.put("fechaNacimiento", employee.getFechaNacimiento() != null ? employee.getFechaNacimiento().toString() : null);
         userData.put("mustChangePassword", credential.isMustChangePassword());
 
         String[] parts = employee.getNombre().trim().split("\\s+");
@@ -164,3 +169,4 @@ public class AuthService {
         return sb.toString();
     }
 }
+

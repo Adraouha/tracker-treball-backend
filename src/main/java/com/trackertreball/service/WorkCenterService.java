@@ -45,3 +45,4 @@ public class WorkCenterService {
         return holidayRepository.findNextHoliday(workCenterId, LocalDate.now());
     }
 }
+

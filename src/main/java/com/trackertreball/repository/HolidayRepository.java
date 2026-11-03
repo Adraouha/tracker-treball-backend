@@ -19,3 +19,4 @@ public interface HolidayRepository extends JpaRepository<Holiday, Long> {
     @Query("SELECT h FROM Holiday h WHERE (h.workCenterId = :workCenterId OR h.workCenterId IS NULL) AND h.fecha >= :today ORDER BY h.fecha ASC LIMIT 1")
     Optional<Holiday> findNextHoliday(@Param("workCenterId") Long workCenterId, @Param("today") LocalDate today);
 }
+

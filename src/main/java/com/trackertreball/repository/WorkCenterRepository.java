@@ -10,3 +10,4 @@ import java.util.Optional;
 public interface WorkCenterRepository extends JpaRepository<WorkCenter, Long> {
     Optional<WorkCenter> findByNombreIgnoreCase(String nombre);
 }
+

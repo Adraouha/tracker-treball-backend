@@ -42,3 +42,4 @@ public class WorkCenterController {
         return ResponseEntity.ok(workCenterService.getHolidaysByWorkCenter(id, ano));
     }
 }
+
