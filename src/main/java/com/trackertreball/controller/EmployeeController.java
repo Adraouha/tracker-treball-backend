@@ -2,66 +2,40 @@ package com.trackertreball.controller;
 
 import com.trackertreball.model.Employee;
 import com.trackertreball.repository.EmployeeRepository;
+import com.trackertreball.service.AuthService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Controlador REST para la administracion y consulta del directorio de empleados.
- * <p>
- * Proporciona acceso al censo corporativo de la organizacion bajo la ruta base {@code /api/v1/employees}:
- * <ul>
- *   <li><b>GET /:</b> Recupera el listado completo de los 21 empleados de la organizacion.</li>
- *   <li><b>GET /{id}:</b> Obtiene los datos detallados de la ficha individual de un empleado.</li>
- *   <li><b>POST /:</b> Da de alta a un nuevo empleado en el sistema.</li>
- * </ul>
- * </p>
+ * Integra la generacion automatica de credenciales seguras de acceso.
  *
  * @author Hassan Adraou
- * @version 1.0.0
+ * @version 2.0.0
  * @since 2026-11-02
- * @see com.trackertreball.model.Employee
- * @see com.trackertreball.repository.EmployeeRepository
  */
 @RestController
 @RequestMapping("/api/v1/employees")
 public class EmployeeController {
 
     private final EmployeeRepository employeeRepository;
+    private final AuthService authService;
 
-    /**
-     * Inyecta el repositorio de empleados para operaciones de lectura y persistencia.
-     *
-     * @param employeeRepository Repositorio JPA de empleados.
-     */
-    public EmployeeController(EmployeeRepository employeeRepository) {
+    public EmployeeController(EmployeeRepository employeeRepository, AuthService authService) {
         this.employeeRepository = employeeRepository;
+        this.authService = authService;
     }
 
-    /**
-     * Endpoint para consultar la lista completa de empleados registrados.
-     * <p>
-     * <b>Ruta HTTP:</b> {@code GET /api/v1/employees}
-     * </p>
-     *
-     * @return {@link ResponseEntity} con codigo HTTP 200 OK y la lista de todos los empleados {@link Employee}.
-     */
     @GetMapping
     public ResponseEntity<List<Employee>> getAllEmployees() {
         return ResponseEntity.ok(employeeRepository.findAll());
     }
 
-    /**
-     * Endpoint para consultar la ficha de un empleado especifico por su identificador unico.
-     * <p>
-     * <b>Ruta HTTP:</b> {@code GET /api/v1/employees/{id}}
-     * </p>
-     *
-     * @param id Identificador unico del empleado.
-     * @return {@link ResponseEntity} con el empleado si existe (200 OK) o 404 Not Found si no se localiza.
-     */
     @GetMapping("/{id}")
     public ResponseEntity<Employee> getEmployeeById(@PathVariable Long id) {
         return employeeRepository.findById(id)
@@ -69,18 +43,35 @@ public class EmployeeController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    /**
-     * Endpoint para registrar un nuevo empleado en la organizacion.
-     * <p>
-     * <b>Ruta HTTP:</b> {@code POST /api/v1/employees}
-     * </p>
-     *
-     * @param employee Objeto con los datos del nuevo empleado en formato JSON.
-     * @return {@link ResponseEntity} con codigo HTTP 201 Created y el nuevo empleado persistido.
-     */
     @PostMapping
-    public ResponseEntity<Employee> createEmployee(@RequestBody Employee employee) {
+    public ResponseEntity<?> createEmployee(@RequestBody Employee employee) {
         Employee saved = employeeRepository.save(employee);
-        return ResponseEntity.status(HttpStatus.CREATED).body(saved);
+        String generatedPassword = authService.createCredentialsForEmployee(saved);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("employee", saved);
+        response.put("generatedPassword", generatedPassword);
+        response.put("message", "Empleado registrado correctamente con credenciales generadas.");
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<Employee> updateEmployee(@PathVariable Long id, @RequestBody Employee updated) {
+        return employeeRepository.findById(id).map(emp -> {
+            if (updated.getNombre() != null) emp.setNombre(updated.getNombre());
+            if (updated.getEmail() != null) emp.setEmail(updated.getEmail());
+            if (updated.getDepartamento() != null) emp.setDepartamento(updated.getDepartamento());
+            if (updated.getPuesto() != null) emp.setPuesto(updated.getPuesto());
+            if (updated.getCentroTrabajo() != null) emp.setCentroTrabajo(updated.getCentroTrabajo());
+            if (updated.getWorkCenterId() != null) emp.setWorkCenterId(updated.getWorkCenterId());
+            if (updated.getNss() != null) emp.setNss(updated.getNss());
+            if (updated.getEstadoCivil() != null) emp.setEstadoCivil(updated.getEstadoCivil());
+            if (updated.getDomicilio() != null) emp.setDomicilio(updated.getDomicilio());
+            if (updated.getFechaNacimiento() != null) emp.setFechaNacimiento(updated.getFechaNacimiento());
+            if (updated.getTelefono() != null) emp.setTelefono(updated.getTelefono());
+            emp.setActivo(updated.isActivo());
+            return ResponseEntity.ok(employeeRepository.save(emp));
+        }).orElse(ResponseEntity.notFound().build());
     }
 }

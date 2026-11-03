@@ -31,6 +31,8 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
      */
     Optional<Employee> findByEmail(String email);
 
+    Optional<Employee> findByEmailIgnoreCase(String email);
+
     /**
      * Obtiene el listado de todos los empleados que pertenecen a un departamento especifico.
      *

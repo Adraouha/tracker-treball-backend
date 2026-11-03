@@ -11,28 +11,15 @@ import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Optional;
+import java.util.*;
 
 /**
- * Servicio de logica de negocio para la gestion del control horario laboral y descansos.
- * <p>
- * Implementa las reglas operativas y de cumplimiento legal (RDL 8/2019):
- * <ul>
- *   <li><b>Inicio de jornada (Clock-in):</b> Valida que no exista una jornada abierta en el dia actual,
- *       registra la hora exacta y sella el registro con hash de integridad.</li>
- *   <li><b>Gestion de pausas (Break Toggle):</b> Permite pausar y reanudar de forma idempotente, computando
- *       la duracion exacta en minutos de cada interrupcion.</li>
- *   <li><b>Cierre de jornada (Clock-out):</b> Finaliza cualquier descanso pendiente, calcula el tiempo neto trabajado
- *       y genera una firma digital criptografica SHA-256 para auditorias de la Inspeccion de Trabajo.</li>
- * </ul>
- * </p>
+ * Servicio de logica de negocio para la gestion del control horario laboral, pausas y auditorias.
+ * Incluye calculo automatico de exceso de descansos y reportes semanales/mensuales.
  *
  * @author Hassan Adraou
- * @version 1.0.0
+ * @version 2.0.0
  * @since 2026-11-02
- * @see com.trackertreball.model.AttendanceRecord
- * @see com.trackertreball.model.BreakRecord
- * @see com.trackertreball.repository.AttendanceRepository
  */
 @Service
 public class AttendanceService {
@@ -40,39 +27,15 @@ public class AttendanceService {
     private final AttendanceRepository attendanceRepository;
     private final BreakRepository breakRepository;
 
-    /**
-     * Constructor con inyeccion de dependencias de los repositorios de asistencia y pausas.
-     *
-     * @param attendanceRepository Repositorio JPA de jornadas laborales.
-     * @param breakRepository Repositorio JPA de descansos y pausas.
-     */
     public AttendanceService(AttendanceRepository attendanceRepository, BreakRepository breakRepository) {
         this.attendanceRepository = attendanceRepository;
         this.breakRepository = breakRepository;
     }
 
-    /**
-     * Obtiene el registro de jornada del dia de hoy para un empleado concreto.
-     *
-     * @param employeeId Identificador unico del empleado.
-     * @return {@link Optional} que contiene la jornada activa o cerrada de hoy si existe.
-     */
     public Optional<AttendanceRecord> getTodayAttendance(Long employeeId) {
         return attendanceRepository.findByEmployeeIdAndWorkDate(employeeId, LocalDate.now());
     }
 
-    /**
-     * Inicia una nueva jornada laboral diaria para el empleado (fichaje de entrada).
-     * <p>
-     * Comprueba primero que el empleado no tenga ya una jornada abierta. En caso satisfactorio,
-     * almacena la marca temporal en el servidor y genera un hash inicial con SHA-256.
-     * </p>
-     *
-     * @param employeeId Identificador del empleado que inicia la jornada.
-     * @param modality Modalidad de fichaje utilizada (ej. MANUAL, BIOMETRIC, REMOTE).
-     * @return El objeto {@link AttendanceRecord} persistido en la base de datos.
-     * @throws IllegalStateException Si el empleado ya posee una jornada abierta en el dia actual.
-     */
     @Transactional
     public AttendanceRecord clockIn(Long employeeId, String modality) {
         LocalDate today = LocalDate.now();
@@ -87,18 +50,50 @@ public class AttendanceService {
         return attendanceRepository.save(record);
     }
 
-    /**
-     * Alterna el estado de descanso del empleado (iniciar o finalizar pausa).
-     * <p>
-     * Si el empleado tiene una pausa abierta sin hora de fin, la cierra calculando los minutos
-     * transcurridos. Si no hay pausas activas, crea un nuevo registro con la hora actual.
-     * </p>
-     *
-     * @param employeeId Identificador unico del empleado.
-     * @param breakType Tipo de pausa solicitada (ej. PAUSA, COMIDA, PRL_VISUAL).
-     * @return El {@link BreakRecord} actualizado o creado.
-     * @throws IllegalStateException Si no existe una jornada de trabajo activa en la fecha actual.
-     */
+    @Transactional
+    public BreakRecord startBreak(Long employeeId, String breakType, Integer tiempoEstipuladoMinutos) {
+        LocalDate today = LocalDate.now();
+        AttendanceRecord attendance = attendanceRepository.findByEmployeeIdAndWorkDate(employeeId, today)
+                .orElseThrow(() -> new IllegalStateException("No hay jornada activa para iniciar descanso."));
+
+        Optional<BreakRecord> openBreak = breakRepository.findFirstByAttendanceIdAndEndTimeIsNullOrderByStartTimeDesc(attendance.getId());
+        if (openBreak.isPresent()) {
+            return openBreak.get();
+        }
+
+        int estipulado = (tiempoEstipuladoMinutos != null && tiempoEstipuladoMinutos > 0) ? tiempoEstipuladoMinutos : 15;
+        BreakRecord b = new BreakRecord(attendance.getId(), breakType != null ? breakType : "PAUSA", LocalDateTime.now(), estipulado);
+        return breakRepository.save(b);
+    }
+
+    @Transactional
+    public BreakRecord finishBreak(Long employeeId) {
+        LocalDate today = LocalDate.now();
+        AttendanceRecord attendance = attendanceRepository.findByEmployeeIdAndWorkDate(employeeId, today)
+                .orElseThrow(() -> new IllegalStateException("No hay jornada activa para finalizar descanso."));
+
+        BreakRecord b = breakRepository.findFirstByAttendanceIdAndEndTimeIsNullOrderByStartTimeDesc(attendance.getId())
+                .orElseThrow(() -> new IllegalStateException("No hay ninguna pausa abierta actualmente."));
+
+        LocalDateTime now = LocalDateTime.now();
+        b.setEndTime(now);
+
+        long duracionMin = Math.max(1, Duration.between(b.getStartTime(), now).toMinutes());
+        b.setDurationMinutes((int) duracionMin);
+
+        int estipulado = b.getTiempoEstipuladoMinutos() != null ? b.getTiempoEstipuladoMinutos() : 15;
+        int exceso = (int) Math.max(0, duracionMin - estipulado);
+        b.setMinutosAdicionales(exceso);
+
+        if (exceso > 0) {
+            b.setMensajeNotificacion("Has consumido " + duracionMin + " minutos de pausa (" + exceso + " minutos adicionales sobre los " + estipulado + " permitidos).");
+        } else {
+            b.setMensajeNotificacion("Pausa completada dentro del tiempo estipulado (" + duracionMin + " de " + estipulado + " min).");
+        }
+
+        return breakRepository.save(b);
+    }
+
     @Transactional
     public BreakRecord toggleBreak(Long employeeId, String breakType) {
         LocalDate today = LocalDate.now();
@@ -106,32 +101,15 @@ public class AttendanceService {
                 .orElseThrow(() -> new IllegalStateException("No hay jornada activa para gestionar pausas."));
 
         Optional<BreakRecord> openBreak = breakRepository.findFirstByAttendanceIdAndEndTimeIsNullOrderByStartTimeDesc(attendance.getId());
-        LocalDateTime now = LocalDateTime.now();
-
         if (openBreak.isPresent()) {
-            BreakRecord b = openBreak.get();
-            b.setEndTime(now);
-            long minutes = Duration.between(b.getStartTime(), now).toMinutes();
-            b.setDurationMinutes((int) minutes);
-            return breakRepository.save(b);
+            return finishBreak(employeeId);
         } else {
-            BreakRecord b = new BreakRecord(attendance.getId(), breakType, now);
-            return breakRepository.save(b);
+            int estipulado = "COMIDA".equalsIgnoreCase(breakType) || "ALMUERZO".equalsIgnoreCase(breakType) ? 60 :
+                             "PRL_VISUAL".equalsIgnoreCase(breakType) ? 5 : 15;
+            return startBreak(employeeId, breakType, estipulado);
         }
     }
 
-    /**
-     * Finaliza la jornada laboral activa del empleado (fichaje de salida).
-     * <p>
-     * Cierra cualquier pausa que haya quedado abierta, calcula los minutos totales trabajados
-     * entre la hora de entrada y la de salida, descuenta los tiempos de pausa registrados,
-     * cambia el estado a {@code CLOSED} y sella criptograficamente el registro mediante SHA-256.
-     * </p>
-     *
-     * @param employeeId Identificador unico del empleado.
-     * @return El {@link AttendanceRecord} debidamente cerrado y firmado.
-     * @throws IllegalStateException Si no se encuentra una jornada abierta para el dia actual.
-     */
     @Transactional
     public AttendanceRecord clockOut(Long employeeId) {
         LocalDate today = LocalDate.now();
@@ -143,10 +121,7 @@ public class AttendanceService {
 
         Optional<BreakRecord> openBreak = breakRepository.findFirstByAttendanceIdAndEndTimeIsNullOrderByStartTimeDesc(attendance.getId());
         if (openBreak.isPresent()) {
-            BreakRecord b = openBreak.get();
-            b.setEndTime(now);
-            b.setDurationMinutes((int) Duration.between(b.getStartTime(), now).toMinutes());
-            breakRepository.save(b);
+            finishBreak(employeeId);
         }
 
         long grossMinutes = Duration.between(attendance.getClockInTime(), now).toMinutes();
@@ -162,13 +137,86 @@ public class AttendanceService {
         return attendanceRepository.save(attendance);
     }
 
-    /**
-     * Genera una cadena hash criptografica SHA-256 inmutable a partir de los datos de la jornada.
-     *
-     * @param employeeId ID del empleado.
-     * @param payload Cadena con marcas temporales y minutos netos.
-     * @return Representacion hexadecimal en minusculas del hash SHA-256.
-     */
+    public Map<String, Object> getReports(Long employeeId) {
+        LocalDate today = LocalDate.now();
+        LocalDate weekStart = today.minusDays(7);
+        LocalDate monthStart = today.minusDays(30);
+
+        List<AttendanceRecord> records = attendanceRepository.findByEmployeeId(employeeId);
+
+        int totalWorkedMinutes = 0;
+        int weekWorkedMinutes = 0;
+        int monthWorkedMinutes = 0;
+
+        int totalPausaMinutes = 0;
+        int totalMinutosAdicionales = 0;
+        int weekMinutosAdicionales = 0;
+        int monthMinutosAdicionales = 0;
+
+        List<Map<String, Object>> breakDetails = new ArrayList<>();
+
+        for (AttendanceRecord att : records) {
+            int worked = att.getWorkedMinutes() != null ? att.getWorkedMinutes() : 0;
+            totalWorkedMinutes += worked;
+
+            if (!att.getWorkDate().isBefore(weekStart)) {
+                weekWorkedMinutes += worked;
+            }
+            if (!att.getWorkDate().isBefore(monthStart)) {
+                monthWorkedMinutes += worked;
+            }
+
+            List<BreakRecord> breaks = breakRepository.findByAttendanceId(att.getId());
+            for (BreakRecord b : breaks) {
+                int dur = b.getDurationMinutes() != null ? b.getDurationMinutes() : 0;
+                int exc = b.getMinutosAdicionales() != null ? b.getMinutosAdicionales() : 0;
+                totalPausaMinutes += dur;
+                totalMinutosAdicionales += exc;
+
+                if (!att.getWorkDate().isBefore(weekStart)) {
+                    weekMinutosAdicionales += exc;
+                }
+                if (!att.getWorkDate().isBefore(monthStart)) {
+                    monthMinutosAdicionales += exc;
+                }
+
+                Map<String, Object> item = new HashMap<>();
+                item.put("fecha", att.getWorkDate());
+                item.put("tipo", b.getBreakType());
+                item.put("duracionMinutos", dur);
+                item.put("estipuladoMinutos", b.getTiempoEstipuladoMinutos());
+                item.put("minutosAdicionales", exc);
+                item.put("mensaje", b.getMensajeNotificacion());
+                breakDetails.add(item);
+            }
+        }
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("employeeId", employeeId);
+        res.put("totalHorasTrabajadas", formatHoursAndMinutes(totalWorkedMinutes));
+        res.put("semanalHorasTrabajadas", formatHoursAndMinutes(weekWorkedMinutes));
+        res.put("mensualHorasTrabajadas", formatHoursAndMinutes(monthWorkedMinutes));
+
+        // Apartado de tiempo adicional consumido en pausas convertido a horas y minutos
+        res.put("totalMinutosAdicionales", totalMinutosAdicionales);
+        res.put("totalTiempoAdicionalConsumido", formatHoursAndMinutes(totalMinutosAdicionales));
+        res.put("semanalTiempoAdicionalConsumido", formatHoursAndMinutes(weekMinutosAdicionales));
+        res.put("mensualTiempoAdicionalConsumido", formatHoursAndMinutes(monthMinutosAdicionales));
+        res.put("totalPausaMinutos", totalPausaMinutos);
+        res.put("desglosePausas", breakDetails);
+
+        return res;
+    }
+
+    private String formatHoursAndMinutes(int totalMinutes) {
+        int hours = totalMinutes / 60;
+        int minutes = totalMinutes % 60;
+        if (hours == 0) {
+            return minutes + " min";
+        }
+        return hours + " h " + (minutes > 0 ? minutes + " min" : "");
+    }
+
     private String generateHash(Long employeeId, String payload) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");

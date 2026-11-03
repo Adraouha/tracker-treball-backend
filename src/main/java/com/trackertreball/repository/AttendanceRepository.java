@@ -40,4 +40,6 @@ public interface AttendanceRepository extends JpaRepository<AttendanceRecord, Lo
      * @return Lista de jornadas laborales ordenadas por fecha mas reciente.
      */
     List<AttendanceRecord> findByEmployeeIdOrderByWorkDateDesc(Long employeeId);
+
+    List<AttendanceRecord> findByEmployeeId(Long employeeId);
 }
