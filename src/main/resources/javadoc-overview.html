@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Tracker Treball - Documentacion Oficial de la API</title>
+</head>
+<body>
+    <h1>Tracker Treball - Arquitectura de Servicios y Backend REST</h1>
+    <p>
+        Bienvenido a la documentacion oficial de la API de <strong>Tracker Treball</strong>, la plataforma
+        de gestion laboral y prevencion de riesgos laborales desarrollada para organizaciones y empresas de Vic / Osona.
+    </p>
+
+    <h2>Pilares del Sistema</h2>
+    <ul>
+        <li>
+            <strong>Control Horario Legal (RDL 8/2019):</strong> Registro diario inmutable de jornadas laborales con
+            fichajes de entrada (<em>clock-in</em>), salida (<em>clock-out</em>), gestion de descansos y sellado
+            criptografico mediante algoritmo SHA-256 para auditorias de la Inspeccion de Trabajo.
+        </li>
+        <li>
+            <strong>Smart Work Assistant &amp; Dashboard:</strong> Panel interactivo de tipo Bento Grid que combina
+            indicadores de jornada, avisos meteorologicos en tiempo real, tiempo de desplazamiento (<em>commute</em>)
+            a la oficina de Vic Central y recordatorios de descansos ergonomicos obligatorios.
+        </li>
+        <li>
+            <strong>Prevencion de Riesgos Laborales (PRL Help Center):</strong> Modulo de gestion de seguridad en el trabajo
+            con emision de llamadas de emergencia SOS geolocalizadas, recepcion de alertas tempranas de Proteccion Civil y
+            canal de notificacion de incidentes o condiciones de peligro (<em>Near Misses</em>).
+        </li>
+        <li>
+            <strong>Seguimiento de Proyectos y Sprints:</strong> Control operativo de asignacion de personal a proyectos
+            tecnologicos, porcentaje de avance en ciclos agiles y computo de horas efectivas dedicadas.
+        </li>
+        <li>
+            <strong>Soporte Bilingue Oficial:</strong> Arquitectura preparada de forma nativa para Catalá y Castellano
+            con resolucion automatica de cabeceras de internacionalizacion.
+        </li>
+    </ul>
+
+    <h2>Estructura de Paquetes</h2>
+    <table style="border-collapse: collapse; width: 100%;">
+        <caption>Listado de paquetes del backend y sus responsabilidades</caption>
+        <thead>
+            <tr style="background-color: #A7333A; color: white;">
+                <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Paquete</th>
+                <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Descripcion y Responsabilidad Arquitectonica</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td style="padding: 8px; border: 1px solid #ddd;"><code>com.trackertreball</code></td>
+                <td style="padding: 8px; border: 1px solid #ddd;">Clase de arranque {@link com.trackertreball.TrackerTreballApplication} y configuracion del contexto Spring Boot.</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px; border: 1px solid #ddd;"><code>com.trackertreball.config</code></td>
+                <td style="padding: 8px; border: 1px solid #ddd;">Configuraciones de seguridad web stateless, politicas CORS multicorigen e internacionalizacion bilingue.</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px; border: 1px solid #ddd;"><code>com.trackertreball.controller</code></td>
+                <td style="padding: 8px; border: 1px solid #ddd;">Controladores REST que publican los endpoints publicos bajo la version {@code /api/v1}.</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px; border: 1px solid #ddd;"><code>com.trackertreball.model</code></td>
+                <td style="padding: 8px; border: 1px solid #ddd;">Entidades JPA del dominio mapeadas a tablas relacionales de base de datos MySQL.</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px; border: 1px solid #ddd;"><code>com.trackertreball.repository</code></td>
+                <td style="padding: 8px; border: 1px solid #ddd;">Interfaces de persistencia y consultas derivadas construidas sobre Spring Data JPA.</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px; border: 1px solid #ddd;"><code>com.trackertreball.service</code></td>
+                <td style="padding: 8px; border: 1px solid #ddd;">Capa de servicios que implementa la logica de negocio, validaciones y firmas criptograficas.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <p style="margin-top: 20px; font-size: 0.9em; color: #555;">
+        Autor: <strong>Hassan Adraou</strong> &bull; Version 1.0.0 &bull; Fecha: Noviembre 2026.
+    </p>
+</body>
+</html>

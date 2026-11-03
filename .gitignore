@@ -1,0 +1,29 @@
+# Binarios de compilacion Maven
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# Entornos de desarrollo (IDE)
+.idea/
+*.iws
+*.iml
+*.ipr
+.vscode/
+.classpath
+.project
+.settings/
+.apt_generated/
+.sts4-cache/
+
+# Archivos de log y temporales
+*.log
+*.tmp
+*.class
+.DS_Store
+Thumbs.db
+desktop.ini
+
+
+nul
+
