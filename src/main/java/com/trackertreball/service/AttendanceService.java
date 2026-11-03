@@ -148,7 +148,7 @@ public class AttendanceService {
         int weekWorkedMinutes = 0;
         int monthWorkedMinutes = 0;
 
-        int totalPausaMinutes = 0;
+        int totalPausaMinutos = 0;
         int totalMinutosAdicionales = 0;
         int weekMinutosAdicionales = 0;
         int monthMinutosAdicionales = 0;
@@ -170,7 +170,7 @@ public class AttendanceService {
             for (BreakRecord b : breaks) {
                 int dur = b.getDurationMinutes() != null ? b.getDurationMinutes() : 0;
                 int exc = b.getMinutosAdicionales() != null ? b.getMinutosAdicionales() : 0;
-                totalPausaMinutes += dur;
+                totalPausaMinutos += dur;
                 totalMinutosAdicionales += exc;
 
                 if (!att.getWorkDate().isBefore(weekStart)) {
