@@ -25,10 +25,10 @@ USER appuser
 # Copia del ejecutable generado desde la etapa de compilacion
 COPY --from=build /app/target/*.jar app.jar
 
-# Render expone y asigna dinamicamente la variable de entorno PORT
+# Railway expone y asigna dinamicamente la variable de entorno PORT
 EXPOSE 8080
 
-# Limite de memoria estricto (-Xmx380m) optimizado para el plan gratuito de Render (512 MB)
+# Limite de memoria estricto (-Xmx380m) optimizado para Railway (512 MB)
 ENV JAVA_OPTS="-Xms256m -Xmx380m -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom"
 
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
