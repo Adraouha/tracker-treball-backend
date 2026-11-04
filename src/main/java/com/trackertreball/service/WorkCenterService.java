@@ -37,8 +37,12 @@ public class WorkCenterService {
     }
 
     public List<Holiday> getHolidaysByWorkCenter(Long workCenterId, Integer ano) {
-        int year = (ano != null) ? ano : LocalDate.now().getYear();
-        return holidayRepository.findByWorkCenterOrNational(workCenterId, year);
+        int year = (ano != null) ? ano : 2026;
+        List<Holiday> holidays = holidayRepository.findByWorkCenterOrNational(workCenterId, year);
+        if (holidays.isEmpty() && year != 2026) {
+            holidays = holidayRepository.findByWorkCenterOrNational(workCenterId, 2026);
+        }
+        return holidays;
     }
 
     public Optional<Holiday> getNextHoliday(Long workCenterId) {
