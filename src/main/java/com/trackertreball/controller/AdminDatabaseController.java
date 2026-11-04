@@ -43,9 +43,16 @@ public class AdminDatabaseController {
         this.jdbcTemplate = jdbcTemplate;
     }
 
-    private void checkAdminAccess(String callerRole) {
+    private void checkManagerOrAdminAccess(String callerRole) {
+        if (callerRole == null || 
+            (!"ADMIN".equalsIgnoreCase(callerRole.trim()) && !"MANAGER".equalsIgnoreCase(callerRole.trim()))) {
+            throw new SecurityException("Acceso restringido. Se requiere rol MANAGER o ADMIN para acceder al gestor visual de base de datos.");
+        }
+    }
+
+    private void checkAdminDeleteAccess(String callerRole) {
         if (callerRole == null || !"ADMIN".equalsIgnoreCase(callerRole.trim())) {
-            throw new SecurityException("Acceso restringido. Solo el Director General / Administrador puede acceder al gestor visual de datos.");
+            throw new SecurityException("Acceso denegado: El rol MANAGER tiene permisos completos de consulta, creación y modificación de registros en la base de datos, pero la eliminación física definitiva está reservada exclusivamente al Director General / Administrador.");
         }
     }
 
@@ -59,7 +66,7 @@ public class AdminDatabaseController {
     @GetMapping
     public ResponseEntity<?> listTables(@RequestHeader(value = "X-User-Role", required = false) String callerRole) {
         try {
-            checkAdminAccess(callerRole);
+            checkManagerOrAdminAccess(callerRole);
         } catch (SecurityException e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", e.getMessage()));
         }
@@ -82,7 +89,7 @@ public class AdminDatabaseController {
             @RequestParam(required = false) String search) {
 
         try {
-            checkAdminAccess(callerRole);
+            checkManagerOrAdminAccess(callerRole);
             String table = validateTable(tableName);
 
             // Obtener columnas
@@ -118,7 +125,7 @@ public class AdminDatabaseController {
             @RequestBody Map<String, Object> data) {
 
         try {
-            checkAdminAccess(callerRole);
+            checkManagerOrAdminAccess(callerRole);
             String table = validateTable(tableName);
 
             // Remove id if present and empty/null
@@ -168,7 +175,7 @@ public class AdminDatabaseController {
             @RequestBody Map<String, Object> data) {
 
         try {
-            checkAdminAccess(callerRole);
+            checkManagerOrAdminAccess(callerRole);
             String table = validateTable(tableName);
 
             data.remove("id");
@@ -217,7 +224,7 @@ public class AdminDatabaseController {
             @RequestHeader(value = "X-User-Role", required = false) String callerRole) {
 
         try {
-            checkAdminAccess(callerRole);
+            checkAdminDeleteAccess(callerRole);
             String table = validateTable(tableName);
 
             String sql = "DELETE FROM " + table + " WHERE id = ?";
@@ -238,3 +245,4 @@ public class AdminDatabaseController {
         }
     }
 }
+
