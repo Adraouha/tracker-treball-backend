@@ -57,6 +57,9 @@ public class Employee {
     @Column(length = 30)
     private String telefono;
 
+    @Column(length = 20, nullable = false)
+    private String rol = "EMPLOYEE";
+
     @Column(nullable = false)
     private boolean activo = true;
 
@@ -106,6 +109,9 @@ public class Employee {
 
     public String getTelefono() { return telefono; }
     public void setTelefono(String telefono) { this.telefono = telefono; }
+
+    public String getRol() { return rol; }
+    public void setRol(String rol) { this.rol = rol; }
 
     public boolean isActivo() { return activo; }
     public void setActivo(boolean activo) { this.activo = activo; }

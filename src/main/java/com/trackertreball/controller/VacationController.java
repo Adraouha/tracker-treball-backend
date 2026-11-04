@@ -26,8 +26,10 @@ public class VacationController {
     }
 
     @GetMapping("/requests")
-    public ResponseEntity<Map<String, Object>> getRequests(@RequestParam(defaultValue = "1") Long employeeId) {
-        return ResponseEntity.ok(vacationService.getVacationsOverview(employeeId));
+    public ResponseEntity<Map<String, Object>> getRequests(
+            @RequestParam(defaultValue = "1") Long employeeId,
+            @RequestHeader(value = "X-User-Role", required = false) String callerRole) {
+        return ResponseEntity.ok(vacationService.getVacationsOverview(employeeId, callerRole));
     }
 
     @PostMapping("/requests")
@@ -76,3 +78,4 @@ public class VacationController {
         ));
     }
 }
+

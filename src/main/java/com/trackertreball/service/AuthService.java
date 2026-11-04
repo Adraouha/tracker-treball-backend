@@ -82,7 +82,8 @@ public class AuthService {
         userData.put("nombre", employee.getNombre());
         userData.put("email", employee.getEmail());
         userData.put("username", credential.getUsername());
-        userData.put("role", employee.getPuesto());
+        userData.put("role", employee.getRol() != null ? employee.getRol() : "EMPLOYEE");
+        userData.put("rol", employee.getRol() != null ? employee.getRol() : "EMPLOYEE");
         userData.put("puesto", employee.getPuesto());
         userData.put("department", employee.getDepartamento());
         userData.put("departamento", employee.getDepartamento());

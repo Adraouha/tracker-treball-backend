@@ -20,3 +20,4 @@ public interface VacationRepository extends JpaRepository<VacationRequest, Long>
 
     List<VacationRequest> findAllByOrderByCreatedAtDesc();
 }
+

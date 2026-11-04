@@ -32,11 +32,36 @@ public class VacationService {
     }
 
     public Map<String, Object> getVacationsOverview(Long employeeId) {
+        return getVacationsOverview(employeeId, null);
+    }
+
+    public Map<String, Object> getVacationsOverview(Long employeeId, String callerRole) {
         Employee employee = employeeRepository.findById(employeeId).orElse(null);
         String employeeName = employee != null ? employee.getNombre() : "Empleado";
+        String resolvedRole = (callerRole != null && !callerRole.isBlank())
+                ? callerRole.trim().toUpperCase()
+                : (employee != null && employee.getRol() != null ? employee.getRol().toUpperCase() : "EMPLOYEE");
 
         List<VacationRequest> myRequests = vacationRepository.findByEmployeeIdOrderByStartDateDesc(employeeId);
         List<VacationRequest> allRequests = vacationRepository.findAllByOrderByCreatedAtDesc();
+
+        List<VacationRequest> teamRequests;
+        if ("ADMIN".equals(resolvedRole)) {
+            teamRequests = allRequests;
+        } else if ("MANAGER".equals(resolvedRole)) {
+            String dept = employee != null ? employee.getDepartamento() : null;
+            Long centerId = employee != null ? employee.getWorkCenterId() : null;
+            List<Long> teamMemberIds = employeeRepository.findAll().stream()
+                    .filter(e -> (dept != null && dept.equalsIgnoreCase(e.getDepartamento())) ||
+                                 (centerId != null && centerId.equals(e.getWorkCenterId())))
+                    .map(Employee::getId)
+                    .toList();
+            teamRequests = allRequests.stream()
+                    .filter(r -> teamMemberIds.contains(r.getEmployeeId()))
+                    .toList();
+        } else {
+            teamRequests = Collections.emptyList();
+        }
 
         int totalDays = 22;
         int usedDays = myRequests.stream()
@@ -61,8 +86,8 @@ public class VacationService {
         result.put("status", "SUCCESS");
         result.put("balance", balance);
         result.put("myRequests", myRequests);
-        // Team requests: listado global accesible para administradores y supervisores
-        result.put("teamRequests", allRequests);
+        result.put("teamRequests", teamRequests);
+        result.put("role", resolvedRole);
 
         return result;
     }
@@ -136,3 +161,4 @@ public class VacationService {
         return vacationRepository.save(req);
     }
 }
+

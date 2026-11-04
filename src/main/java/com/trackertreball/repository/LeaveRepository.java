@@ -20,3 +20,4 @@ public interface LeaveRepository extends JpaRepository<MedicalLeave, Long> {
 
     List<MedicalLeave> findByEmployeeIdOrderByFechaInicioDesc(Long employeeId);
 }
+
